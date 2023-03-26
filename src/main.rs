@@ -4,6 +4,7 @@ use axum::{
     Json,
     Router, routing::get};
 use serde::{Deserialize, Serialize};
+use tower_http::cors::{Any, CorsLayer};
 
 #[derive(Debug, Deserialize, Serialize)]
 struct Product {
@@ -40,7 +41,9 @@ async fn get_products() -> Json<Vec<Product>> {
 #[tokio::main]
 async fn main() {
     let app = Router::new()
-        .route("/products", get(get_products));
+        .route("/products", get(get_products).layer(
+            CorsLayer::new().allow_origin(Any)
+        ));
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     axum::Server::bind(&addr)
