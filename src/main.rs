@@ -42,27 +42,58 @@ struct Params {
 }
 
 async fn get_products(Query(params): Query<Params>) -> Json<Vec<Product>> {
+    let products = get_products_from_api().await;
+    let products = filter_images(products);
+    let products = sort_products(products, &params.sort_by);
+    let products = paginate_products(products, &params);
+
+    Json(products)
+}
+
+async fn get_products_from_api() -> Vec<Product> {
     let url = "https://api.escuelajs.co/api/v1/products";
     let res = reqwest::get(url).await.expect("failed to get response");
-    let mut products: Vec<Product> = res.json().await.expect("failed to parse response");
+    let products: Vec<Product> = res.json().await.expect("failed to parse response");
+    products
+}
+
+fn filter_images(mut products: Vec<Product>) -> Vec<Product> {
     for product in &mut products {
         if let Some(image) = product.images.pop() {
             product.images = vec![image];
         }
     }
-    if let Some(sort_by) = &params.sort_by {
-        if sort_by == "asc" {
-            products.sort_by(|a, b| a.price.partial_cmp(&b.price).unwrap_or(Ordering::Equal));
-        } else if sort_by == "desc" {
-            products.sort_by(|a, b| b.price.partial_cmp(&a.price).unwrap_or(Ordering::Equal));
+    products
+}
+
+fn sort_products(mut products: Vec<Product>, sort_by: &Option<String>) -> Vec<Product> {
+    if let Some(sort_by) = sort_by {
+        match sort_by.as_str() {
+            "asc" => {
+                products.sort_by(|a, b| {
+                    a.price.partial_cmp(&b.price).unwrap_or(Ordering::Equal)
+                });
+            }
+            "desc" => {
+                products.sort_by(|a, b| {
+                    b.price.partial_cmp(&a.price).unwrap_or(Ordering::Equal)
+                });
+            }
+            _ => {}
         }
     }
+    products
+}
 
+fn paginate_products(products: Vec<Product>, params: &Params) -> Vec<Product> {
     let start = (params.page.unwrap_or(1) - 1) * params.limit.unwrap_or(10);
     let end = start + params.limit.unwrap_or(100);
-    let paginated_products = products.into_iter().skip(start as usize).map(|s| s).take((end - start) as usize).collect();
-
-    Json(paginated_products)
+    let paginated_products = products
+        .into_iter()
+        .skip(start as usize)
+        .take((end - start) as usize)
+        .collect();
+    paginated_products
 }
 
 #[tokio::main]
