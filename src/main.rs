@@ -41,11 +41,15 @@ struct Params {
     sort_by: Option<String>,
 }
 
-pub async fn get_products(Query(params): Query<Params>) -> Json<Vec<Product>> {
+async fn get_products(Query(params): Query<Params>) -> Json<Vec<Product>> {
     let url = "https://api.escuelajs.co/api/v1/products";
     let res = reqwest::get(url).await.expect("failed to get response");
     let mut products: Vec<Product> = res.json().await.expect("failed to parse response");
-
+    for product in &mut products {
+        if let Some(image) = product.images.pop() {
+            product.images = vec![image];
+        }
+    }
     if let Some(sort_by) = &params.sort_by {
         if sort_by == "asc" {
             products.sort_by(|a, b| a.price.partial_cmp(&b.price).unwrap_or(Ordering::Equal));
@@ -56,11 +60,10 @@ pub async fn get_products(Query(params): Query<Params>) -> Json<Vec<Product>> {
 
     let start = (params.page.unwrap_or(1) - 1) * params.limit.unwrap_or(10);
     let end = start + params.limit.unwrap_or(100);
-    let paginated_products = products.into_iter().skip(start as usize).take((end - start) as usize).collect();
+    let paginated_products = products.into_iter().skip(start as usize).map(|s| s).take((end - start) as usize).collect();
 
     Json(paginated_products)
 }
-
 
 #[tokio::main]
 async fn main() {
@@ -75,5 +78,3 @@ async fn main() {
         .await
         .unwrap();
 }
-
-
