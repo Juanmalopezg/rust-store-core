@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::net::SocketAddr;
 
 use axum::{
@@ -34,14 +35,24 @@ struct Category {
 
 #[derive(Debug, Deserialize, Serialize)]
 struct Params {
-    page: Option<i8>,
-    limit: Option<i8>,
+    page: Option<u8>,
+    limit: Option<u8>,
+    #[serde(rename = "sortBy")]
+    sort_by: Option<String>,
 }
 
-async fn get_products(Query(params): Query<Params>) -> Json<Vec<Product>> {
+pub async fn get_products(Query(params): Query<Params>) -> Json<Vec<Product>> {
     let url = "https://api.escuelajs.co/api/v1/products";
     let res = reqwest::get(url).await.expect("failed to get response");
-    let products: Vec<Product> = res.json().await.expect("failed to parse response");
+    let mut products: Vec<Product> = res.json().await.expect("failed to parse response");
+
+    if let Some(sort_by) = &params.sort_by {
+        if sort_by == "asc" {
+            products.sort_by(|a, b| a.price.partial_cmp(&b.price).unwrap_or(Ordering::Equal));
+        } else if sort_by == "desc" {
+            products.sort_by(|a, b| b.price.partial_cmp(&a.price).unwrap_or(Ordering::Equal));
+        }
+    }
 
     let start = (params.page.unwrap_or(1) - 1) * params.limit.unwrap_or(10);
     let end = start + params.limit.unwrap_or(100);
